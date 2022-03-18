@@ -23,6 +23,18 @@ router.post("/signup", async function (req, res) {
   const enteredConfirmEmail = userData["confirm-email"]; // not using . notation because confirm-email has a - in it, therefore not allowing it.
   const enteredPassword = userData.password;
 
+  if (!enteredEmail || !enteredConfirmEmail || !enteredPassword || enteredPassword.trim() < 6 || enteredEmail !== enteredConfirmEmail || !enteredEmail.includes("@")) { // checking for invalid inputs. trim() removes excess whitespace.
+    console.log("Incorrect data");
+    return res.redirect("/signup");
+  }
+
+  const existingUser = await db.getDb().collection("users").findOne({email: enteredEmail}); // checking if the user signing up alredy exists
+
+  if (existingUser) {
+    console.log("User exists already");
+    return res.redirect("/signup"); // redirecting if the user exists.
+  }
+
   const hashedPassword = await bcrypt.hash(enteredPassword, 12); //hashes the password with random shit, and the number is the strength of it
 
   const user = {
@@ -65,7 +77,9 @@ router.post("/login", async function (req, res) {
 });
 
 router.get("/admin", function (req, res) {
+  // check the user 'ticket' to see if it matches with that of valid admin access.
   res.render("admin");
+
 });
 
 router.post("/logout", function (req, res) {});
