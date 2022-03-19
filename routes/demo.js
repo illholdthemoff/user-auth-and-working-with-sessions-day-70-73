@@ -77,7 +77,7 @@ router.post("/login", async function (req, res) {
 });
 
 router.get("/admin", function (req, res) {
-  // check the user 'ticket' to see if it matches with that of valid admin access.
+  // check the user 'ticket' to see if it matches with that of valid admin access
   res.render("admin");
 
 });
