@@ -28,7 +28,19 @@ router.get("/signup", function (req, res) {
 });
 
 router.get("/login", function (req, res) {
-  res.render("login");
+  let sessionInputData = req.session.inputData; // grabbing the input data as used below
+
+  if (!sessionInputData) {
+    // checking if there is no/falsy inputdata and then initializing it if there isnt
+    sessionInputData = {
+      hasError: false,
+      email: "",
+      password: "",
+    };
+  }
+
+  req.session.inputData = null;
+  res.render("login", { inputData: sessionInputData });
 });
 
 router.post("/signup", async function (req, res) {
@@ -69,8 +81,19 @@ router.post("/signup", async function (req, res) {
     .findOne({ email: enteredEmail }); // checking if the user signing up alredy exists
 
   if (existingUser) {
-    console.log("User exists already");
-    return res.redirect("/signup"); // redirecting if the user exists.
+    req.session.inputData = {
+      // storing session data, so that in the event of a signup fuckup like mispelling confirm email or too short password it doesnt just clear all the data when reloading the page.
+      hasError: true,
+      message: "User exists already!",
+      email: enteredEmail,
+      confirmEmail: enteredConfirmEmail,
+      password: enteredPassword,
+    };
+    req.session.save(function () {
+      res.redirect("/signup"); // redirecting if the user exists.
+    });
+
+    return;
   }
 
   const hashedPassword = await bcrypt.hash(enteredPassword, 12); //hashes the password with random shit, and the number is the strength of it
@@ -96,8 +119,17 @@ router.post("/login", async function (req, res) {
     .findOne({ email: enteredEmail }); // determining whether the login attempt is from an existing user or not by checking their entered email against those in the database.
 
   if (!existingUser) {
-    console.log("Could not log in, not existing user");
-    return res.redirect("/login");
+    req.session.inputData = {
+      // storing session data, so that in the event of a signup fuckup like mispelling confirm email or too short password it doesnt just clear all the data when reloading the page.
+      hasError: true,
+      message: "Could not log in! Please check your credentials!",
+      email: enteredEmail,
+      password: enteredPassword,
+    };
+    req.session.save(function () {
+      res.redirect("/login");
+    });
+    return;
   }
 
   const passwordsAreEqual = await bcrypt.compare(
@@ -106,8 +138,17 @@ router.post("/login", async function (req, res) {
   ); // checking if the password entered matches that in the database by throwing the same algorithm used when storing it initially at the entered one.
 
   if (!passwordsAreEqual) {
-    console.log("Wrong password DUMPASS");
-    return res.redirect("/login");
+    req.session.inputData = {
+      // storing session data, so that in the event of a signup fuckup like mispelling confirm email or too short password it doesnt just clear all the data when reloading the page.
+      hasError: true,
+      message: "Could not log in! Please check your credentials!",
+      email: enteredEmail,
+      password: enteredPassword,
+    };
+    req.session.save(function () {
+      res.redirect("/login");
+    });
+    return;
   }
 
   // console.log("user authenticated");
@@ -117,19 +158,44 @@ router.post("/login", async function (req, res) {
   req.session.save(function () {
     // using save here because while the below is true, it might not be saved in time to authenticate the user, so they might be temporarily denied access to the admin page.
 
-    res.redirect("/admin"); // something to note is that when this is called it saves the relevant data to the database. It has been moved back inside this callback function since we only want it to fire once the session data has been saved.
+    res.redirect("/profile"); // something to note is that when this is called it saves the relevant data to the database. It has been moved back inside this callback function since we only want it to fire once the session data has been saved.
   });
 });
 
-router.get("/admin", function (req, res) {
+router.get("/admin", async function (req, res) {
   // check the user 'ticket' to see if it matches with that of valid admin access
 
-  if (!req.session.isAuthenticated) {
+  //if (!req.session.isAuthenticated) {
+  if (!res.locals.isAuth) {
     // checking if user does not have an active session. Alternatively we could tpye if (!req.session.user) instead and get the same effect.
     return res.status(401).render("401"); // telling the browser and rendering a page that the user was denied access.
   }
 
+  // const user = await db // ultimately not needed because of res.locals.
+  //   .getDb()
+  //   .collection("users")
+  //   .findOne({ _id: req.session.user.id }); // grabbing the user's ID for the sake of identifying them.
+
+  // if (!user || !user.isAdmin) {
+  //    if user is not logged in or if the logged in user is not admin
+  //   return res.status(403).render("403"); // VERBOTEN sending the 403 status code to the broswer in addition to loading the 403 forbidden page
+  // }
+
+  if (!res.locals.isAdmin) {
+    // using this instead of the above for a better way to check if the user is admin.
+    return res.status(403).render("403");
+  }
+
   res.render("admin");
+});
+
+router.get("/profile", function (req, res) {
+  // if (!req.session.isAuthenticated) {
+  if (!res.locals.isAuth) {
+    return res.status(401).render("401");
+  }
+
+  res.render("profile");
 });
 
 router.post("/logout", function (req, res) {
